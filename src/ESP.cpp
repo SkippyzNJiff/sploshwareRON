@@ -92,17 +92,12 @@ ImVec4 ESP::GetEntityColor(const ESPEntity& entity) {
 }
 
 void ESP::Update() {
-    static int updateCount = 0;
-    updateCount++;
-    
-    // Only perform the heavy world scan every N frames to reduce CPU usage.
-    constexpr int SCAN_INTERVAL = 30; // ~0.5 s at 60 FPS – tweak if needed
-    bool shouldRefreshEntities = (updateCount % SCAN_INTERVAL == 0);
+    // Run a full scan every frame. The old implementation throttled updates and
+    // caused the ESP to appear frozen for several seconds on slower machines.
+    // With the heavy debug logging removed this scan is cheap enough.
+    bool shouldRefreshEntities = true;
     
     if (!settings.enabled) {
-        if (updateCount % 120 == 0) {
-            std::cout << "[ESP] ESP disabled, skipping update" << std::endl;
-        }
         return;
     }
     
@@ -112,36 +107,28 @@ void ESP::Update() {
     }
     
     // ------------------------------------
-    // Full scan path – executed once every SCAN_INTERVAL frames
+    // Full scan path – executed every frame
     // ------------------------------------
     entities.clear();
-    std::cout << "[ESP] ESP enabled, starting update (full scan)..." << std::endl;
+    // Perform a complete actor scan
     
     try {
         // Get local player position for distance calculations
-        std::cout << "[ESP] Getting camera location..." << std::endl;
         FVector localPlayerPos = GameSDK::GetCameraLocation();
-        std::cout << "[ESP] Camera position: (" << localPlayerPos.X << ", " << localPlayerPos.Y << ", " << localPlayerPos.Z << ")" << std::endl;
         
         // Get all actors in the world
-        std::cout << "[ESP] Attempting to get all actors..." << std::endl;
         std::vector<AActor*> actors;
         
         try {
             actors = GameSDK::GetAllActors();
-            std::cout << "[ESP] Found " << actors.size() << " actors to process" << std::endl;
-            
             if (actors.empty()) {
-                std::cout << "[ESP] No actors found, skipping update" << std::endl;
                 return;
             }
         }
         catch (const std::exception& e) {
-            std::cout << "[ESP] Exception in GetAllActors(): " << e.what() << " - Skipping actor processing." << std::endl;
             return;
         }
         catch (...) {
-            std::cout << "[ESP] Unknown exception in GetAllActors()! Skipping actor processing." << std::endl;
             return;
         }
         
@@ -231,7 +218,7 @@ void ESP::Update() {
             }
         }
         
-        std::cout << "[ESP] Processed " << processedActors << " actors, found " << validActors << " valid entities" << std::endl;
+        // processedActors and validActors are kept for potential debugging
         
         // Sort by distance (closest first)
         std::sort(entities.begin(), entities.end(), 
@@ -245,11 +232,9 @@ void ESP::Update() {
         }
     }
     catch (const std::exception& e) {
-        std::cout << "[ESP] Exception in Update(): " << e.what() << std::endl;
         entities.clear();
     }
     catch (...) {
-        std::cout << "[ESP] Unknown exception in Update()" << std::endl;
         entities.clear();
     }
 }
@@ -258,14 +243,7 @@ void ESP::Render() {
     static int renderCount = 0;
     renderCount++;
     
-    if (renderCount % 60 == 0) { // Log every 60 renders
-        std::cout << "[ESP] Render called (count: " << renderCount << ", enabled: " << (settings.enabled ? "true" : "false") << ")" << std::endl;
-    }
-    
     if (!settings.enabled) {
-        if (renderCount % 120 == 0) {
-            std::cout << "[ESP] ESP disabled, skipping render" << std::endl;
-        }
         return;
     }
     
@@ -273,9 +251,6 @@ void ESP::Render() {
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
     
     // Debug visualization - always show a test indicator
-    if (renderCount % 120 == 0) {
-        std::cout << "[ESP] Drawing debug indicator..." << std::endl;
-    }
     
     // Draw a simple test indicator in the top-left corner to verify ESP is rendering
     ImVec2 testPos(50, 50);
@@ -292,7 +267,6 @@ void ESP::Render() {
     sprintf_s(fpsText, "FPS: %.1f", fps);
     drawList->AddText(ImVec2(70, 85), IM_COL32(255, 255, 0, 255), fpsText);
     
-    std::cout << "[ESP] Rendering " << entities.size() << " ESP entities..." << std::endl;
     
     for (const ESPEntity& entity : entities) {
         if (!entity.isVisible) continue;
