@@ -1,2 +1,0 @@
-C:\Users\sigmad\Desktop\ImGui-DirectX-11-Kiero-Hook-master\ImGui DirectX 11 Kiero Hook\x64\Release\ImGui DirectX 11 Kiero Hook.dll
-C:\Users\sigmad\Desktop\sploshwareRON\ImGui DirectX 11 Kiero Hook\x64\Release\sploshwareRON.dll
