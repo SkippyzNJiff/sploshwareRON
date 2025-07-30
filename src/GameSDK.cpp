@@ -357,58 +357,59 @@ namespace GameSDK {
     }
     
     bool WorldToScreen(const FVector& worldPos, FVector2D& screenPos) {
-        static int callCount = 0;
-        callCount++;
-        
-        if (callCount % 30 == 0) { // Log every 30 calls to reduce spam
-            std::cout << "[GameSDK] WorldToScreen called for position: (" << worldPos.X << ", " << worldPos.Y << ", " << worldPos.Z << ")" << std::endl;
-        }
-        
         try {
-            // Get camera location first
             FVector cameraLocation = GetCameraLocation();
-            
-            // Use simplified projection method that's more reliable
-            FVector direction = worldPos - cameraLocation;
-            float distance = direction.Distance(FVector());
-            
-            if (distance < 1.0f) {
-                return false; // Too close
+            FRotator cameraRotation = GetCameraRotation();
+
+            // Convert rotation to radians
+            auto Deg2Rad = [](float deg) { return deg * static_cast<float>(M_PI) / 180.0f; };
+            float pitch = Deg2Rad(cameraRotation.Pitch);
+            float yaw   = Deg2Rad(cameraRotation.Yaw);
+
+            // Create basic rotation matrix (roll is ignored)
+            FVector forward{
+                cosf(pitch) * cosf(yaw),
+                cosf(pitch) * sinf(yaw),
+                sinf(pitch)
+            };
+
+            FVector right{
+                -sinf(yaw),
+                cosf(yaw),
+                0.0f
+            };
+
+            FVector up{
+                -sinf(pitch) * cosf(yaw),
+                -sinf(pitch) * sinf(yaw),
+                cosf(pitch)
+            };
+
+            FVector delta = worldPos - cameraLocation;
+
+            // Transform world to view space
+            FVector view{
+                delta.X * right.X + delta.Y * right.Y + delta.Z * right.Z,
+                delta.X * up.X    + delta.Y * up.Y    + delta.Z * up.Z,
+                delta.X * forward.X + delta.Y * forward.Y + delta.Z * forward.Z
+            };
+
+            if (view.Z <= 1.0f) {
+                return false; // behind camera
             }
-            
-            // Get screen dimensions
-            float screenWidth = (float)GetSystemMetrics(SM_CXSCREEN);
-            float screenHeight = (float)GetSystemMetrics(SM_CYSCREEN);
-            
-            // Simple perspective projection
-            // This is a simplified version that should work even if camera rotation is incorrect
-            float projectionScale = 1000.0f; // Adjust this value to scale the projection
-            
-            // Project X and Z components to screen space
-            // Using a simple orthographic-like projection for testing
-            screenPos.X = (screenWidth * 0.5f) + (direction.X / distance) * projectionScale;
-            screenPos.Y = (screenHeight * 0.5f) - (direction.Z / distance) * projectionScale;
-            
-            // Check if on screen
-            bool onScreen = (screenPos.X >= -100 && screenPos.X <= screenWidth + 100 && 
-                           screenPos.Y >= -100 && screenPos.Y <= screenHeight + 100);
-            
-            if (callCount % 30 == 0 && onScreen) {
-                std::cout << "[GameSDK] WorldToScreen success: (" << screenPos.X << ", " << screenPos.Y << ")" << std::endl;
-            }
-            
-            return onScreen;
-        }
-        catch (const std::exception& e) {
-            if (callCount % 100 == 0) {
-                std::cout << "[GameSDK] Exception in WorldToScreen: " << e.what() << std::endl;
-            }
-            return false;
+
+            float screenWidth = static_cast<float>(GetSystemMetrics(SM_CXSCREEN));
+            float screenHeight = static_cast<float>(GetSystemMetrics(SM_CYSCREEN));
+            float fov = 90.0f; // default FOV
+            float fovRad = Deg2Rad(fov);
+
+            screenPos.X = (screenWidth / 2.0f) + (view.X / view.Z) * (screenWidth / (2.0f * tanf(fovRad / 2.0f)));
+            screenPos.Y = (screenHeight / 2.0f) - (view.Y / view.Z) * (screenWidth / (2.0f * tanf(fovRad / 2.0f)));
+
+            return (screenPos.X >= 0 && screenPos.X <= screenWidth &&
+                    screenPos.Y >= 0 && screenPos.Y <= screenHeight);
         }
         catch (...) {
-            if (callCount % 100 == 0) {
-                std::cout << "[GameSDK] Unknown exception in WorldToScreen" << std::endl;
-            }
             return false;
         }
     }
